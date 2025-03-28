@@ -1,37 +1,25 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { User } from '../models/User';
-import { AppDataSource } from '../config/db';
+import { config } from '../config';
+import { JwtPayload } from '../types';
 
-const userRepository = AppDataSource.getRepository(User);
+export const authenticateToken = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader?.split(' ')[1];
 
-export const authenticate = async (req: Request, res: Response, next: NextFunction) => {
+  if (!token) {
+    return res.status(401).json({ message: 'Authentication required' });
+  }
+
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    
-    if (!token) {
-      return res.status(401).json({ message: 'Authentication required' });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
-    const user = await userRepository.findOne({ where: { id: decoded.userId } });
-
-    if (!user) {
-      return res.status(401).json({ message: 'User not found' });
-    }
-
-    req.user = user;
+    const decoded = jwt.verify(token, config.jwtSecret) as JwtPayload;
+    req.user = decoded;
     next();
   } catch (error) {
-    res.status(401).json({ message: 'Invalid token' });
+    return res.status(403).json({ message: 'Invalid token' });
   }
-};
-
-export const checkVerified = (req: Request, res: Response, next: NextFunction) => {
-  if (!req.user?.emailVerified) {
-    return res.status(403).json({ 
-      message: 'Email not verified. Please verify your email.' 
-    });
-  }
-  next();
 };
